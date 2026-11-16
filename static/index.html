@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Portfoliomanager</title>
+<link rel="icon" href="/static/icon.ico">
+<script>
+  // Farbmodus vor dem ersten Zeichnen setzen, damit nichts aufblitzt
+  (function () {
+    var t = null;
+    try { t = localStorage.getItem("theme"); } catch (e) {}
+    if (!t) t = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    document.documentElement.dataset.theme = t;
+  })();
+</script>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="sidebar">
+    <button class="brand" type="button" data-goto="home" title="Zum Startbildschirm">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="3" y="12" width="4" height="9" rx="1.5"/><rect x="10" y="7" width="4" height="14" rx="1.5"/><rect x="17" y="3" width="4" height="18" rx="1.5"/></svg>
+      <span>Portfoliomanager</span>
+    </button>
+    <nav id="nav">
+      <button data-tab="overview">Übersicht</button>
+      <button data-tab="charts">Kurse</button>
+      <button data-tab="allocation">Aufteilung</button>
+      <button data-tab="watch">Watchlist</button>
+      <button data-tab="news">Nachrichten &amp; Zahlen</button>
+      <button data-tab="calendar">Kalender</button>
+      <button data-tab="dividends">Dividenden</button>
+      <button data-tab="plan">Sparplan</button>
+      <button data-tab="settings">Einstellungen</button>
+    </nav>
+    <div class="sidebar-foot">
+      <div id="sessBadge" class="sess off"><span class="sess-dot"></span><span id="sessText">Keine Sitzung aktiv</span></div>
+      <button id="sessEndBtn" class="stop" type="button" disabled>Sitzung beenden</button>
+      <button id="themeBtn" class="ghost" type="button">Dunkler Modus</button>
+    </div>
+  </aside>
+
+  <main>
+    <header class="topbar">
+      <div>
+        <h1 id="pageTitle">Start</h1>
+        <p id="stamp" class="muted"></p>
+      </div>
+      <div class="actions">
+        <button id="refreshBtn" class="ghost" type="button">Kurse aktualisieren</button>
+        <button id="syncBtn" class="primary" type="button">Depot abrufen</button>
+      </div>
+    </header>
+
+    <div id="updateBar" class="updatebar" hidden>
+      <div><strong>Das Programm wurde aktualisiert.</strong> <span id="updateText">Damit alle Funktionen arbeiten, muss es einmal neu gestartet werden.</span></div>
+      <button class="primary" type="button" id="updateBtn">Jetzt neu starten</button>
+    </div>
+    <div id="banner" class="banner" hidden></div>
+
+    <!-- Startbildschirm -->
+    <section id="tab-home" class="tab">
+      <div class="hero">
+        <svg class="hero-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="12" width="4" height="9" rx="1.5"/><rect x="10" y="7" width="4" height="14" rx="1.5"/><rect x="17" y="3" width="4" height="18" rx="1.5"/></svg>
+        <h2 class="hero-title" id="homeHello">Willkommen</h2>
+        <p class="hero-sub">Schön, dass du da bist. Hier ist dein Portfoliomanager.</p>
+        <div class="hero-status off" id="homeStatus">
+          <span class="sess-dot"></span>
+          <div>
+            <strong id="homeStatusTitle">Keine comdirect-Sitzung aktiv</strong>
+            <span id="homeStatusText">Du bist nicht bei comdirect angemeldet.</span>
+          </div>
+        </div>
+        <div class="hero-actions">
+          <button class="primary big-btn" type="button" id="homeLogin">Bei comdirect anmelden</button>
+          <button class="ghost big-btn" type="button" data-goto="overview">Ohne Anmeldung zur Übersicht</button>
+        </div>
+        <p class="muted hero-note" id="homeNote">Deine gespeicherten Depotdaten und aktuelle Kurse siehst du auch ohne Anmeldung. Die Anmeldung brauchst du nur, um den Depotbestand neu von comdirect abzurufen, zum Beispiel nach einem Kauf oder Verkauf.</p>
+        <p class="muted hero-note" id="homeFacts"></p>
+      </div>
+    </section>
+
+    <!-- Sitzung beendet -->
+    <section id="tab-bye" class="tab" hidden>
+      <div class="hero">
+        <svg class="hero-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a5 5 0 0 0-5 5v3H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8a2 2 0 0 0-2-2h-1V7a5 5 0 0 0-5-5zm-3 8V7a3 3 0 0 1 6 0v3H9z"/></svg>
+        <h2 class="hero-title">Sitzung beendet</h2>
+        <p class="hero-sub">Auf Wiedersehen und bis zum nächsten Mal!</p>
+        <div class="hero-status off">
+          <span class="sess-dot"></span>
+          <div>
+            <strong>Du bist von comdirect abgemeldet</strong>
+            <span id="byeReason">Die Verbindung zu comdirect wurde getrennt.</span>
+          </div>
+        </div>
+        <div class="hero-actions">
+          <button class="primary big-btn" type="button" id="byeLogin">Erneut anmelden</button>
+          <button class="ghost big-btn" type="button" data-goto="home">Zum Startbildschirm</button>
+          <button class="ghost big-btn danger" type="button" id="byeQuit">Programm beenden</button>
+        </div>
+        <p class="muted hero-note">Deine Depotdaten bleiben auf diesem Rechner gespeichert und sind weiter sichtbar. Das Programm selbst läuft noch im Hintergrund, bis du es beendest.</p>
+      </div>
+    </section>
+
+    <!-- Übersicht -->
+    <section id="tab-overview" class="tab" hidden>
+      <div id="empty" class="card empty" hidden>
+        <h2>Noch keine Depotdaten</h2>
+        <p>Trage in den Einstellungen deine comdirect-Zugangsdaten ein und rufe dann dein Depot ab. Alternativ kannst du dort Positionen von Hand anlegen oder eine CSV-Datei importieren.</p>
+        <button class="primary" type="button" data-goto="settings">Zu den Einstellungen</button>
+      </div>
+      <div id="overviewBody">
+        <div class="tiles">
+          <div class="tile"><span class="label">Depotwert</span><span class="big" id="kpiValue">–</span><span class="sub" id="kpiCount"></span></div>
+          <div class="tile"><span class="label">Veränderung zum Vortag</span><span class="big" id="kpiDay">–</span><span class="sub" id="kpiDayAbs"></span></div>
+          <div class="tile"><span class="label">Gewinn / Verlust gesamt</span><span class="big" id="kpiPl">–</span><span class="sub" id="kpiPlAbs"></span></div>
+          <div class="tile"><span class="label">Kaufwert</span><span class="big" id="kpiBuy">–</span><span class="sub">Summe aller Einstandswerte</span></div>
+        </div>
+        <div class="card">
+          <div class="filters">
+            <label>Produktart <select id="fType"></select></label>
+            <label>Branche <select id="fSector"></select></label>
+            <label>Suche <input id="fSearch" type="search" placeholder="Name, WKN oder ISIN"></label>
+            <span id="fCount" class="muted"></span>
+          </div>
+          <div class="table-wrap">
+            <table id="posTable">
+              <thead><tr>
+                <th data-sort="name" class="left">Position</th>
+                <th data-sort="type" class="left">Art</th>
+                <th data-sort="sector" class="left">Branche</th>
+                <th data-sort="quantity">Stück</th>
+                <th data-sort="purchase_price">Kaufkurs</th>
+                <th data-sort="price">Kurs</th>
+                <th data-sort="day_pct">Vortag</th>
+                <th data-sort="value">Wert</th>
+                <th data-sort="share">Anteil</th>
+                <th data-sort="pl_pct">Gewinn / Verlust</th>
+              </tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Kurse -->
+    <section id="tab-charts" class="tab" hidden>
+      <div class="card">
+        <div class="filters">
+          <label>Anzeige <select id="cSelect"></select></label>
+          <div class="seg" id="cRange">
+            <button data-r="1W">1 Woche</button><button data-r="1M">1 Monat</button><button data-r="6M">6 Monate</button>
+            <button data-r="1J" class="active">1 Jahr</button><button data-r="5J">5 Jahre</button><button data-r="MAX">Maximum</button>
+          </div>
+          <div class="toggles" id="cAvg" title="Durchschnitt der Schlusskurse der letzten 50 bzw. 200 Handelstage">
+            <button type="button" data-avg="ma50" aria-pressed="false"><span class="swatch s2"></span>50-Tage-Linie</button>
+            <button type="button" data-avg="ma200" aria-pressed="false"><span class="swatch s3"></span>200-Tage-Linie</button>
+          </div>
+        </div>
+        <div class="chart-head">
+          <div><span class="label" id="cUnit"></span><span class="big" id="cLast">–</span></div>
+          <div><span class="label">Im gewählten Zeitraum</span><span class="mid" id="cChange">–</span></div>
+        </div>
+        <div class="chart-box"><canvas id="lineChart"></canvas><p id="cEmpty" class="muted center" hidden>Für diese Auswahl liegen keine Kursdaten vor.</p></div>
+        <p id="cNote" class="note" hidden></p>
+      </div>
+    </section>
+
+    <!-- Aufteilung -->
+    <section id="tab-allocation" class="tab" hidden>
+      <div class="grid3">
+        <div class="card"><h2>Nach Position</h2><div class="donut"><canvas id="pieName"></canvas></div><ul class="legend" id="legName"></ul></div>
+        <div class="card"><h2>Nach Branche</h2><div class="donut"><canvas id="pieSector"></canvas></div><ul class="legend" id="legSector"></ul></div>
+        <div class="card"><h2>Nach Produktart</h2><div class="donut"><canvas id="pieType"></canvas></div><ul class="legend" id="legType"></ul></div>
+      </div>
+    </section>
+
+    <!-- Watchlist -->
+    <section id="tab-watch" class="tab" hidden>
+      <div class="card">
+        <h2>Wertpapier hinzufügen</h2>
+        <p class="muted">Hier beobachtest du Wertpapiere, die nicht in deinem Depot liegen. Suche nach Name, ISIN, WKN oder Ticker und wähle den passenden Handelsplatz aus.</p>
+        <form id="wSearchForm" class="form inline">
+          <label>Suche <input id="wQuery" type="search" placeholder="z. B. Siemens oder DE0007236101" required minlength="2" style="width:320px"></label>
+          <button class="primary" type="submit">Suchen</button>
+        </form>
+        <div id="wResults" hidden>
+          <div class="table-wrap"><table id="wResultTable"><thead><tr><th class="left">Wertpapier</th><th class="left">Ticker</th><th class="left">Handelsplatz</th><th class="left">Art</th><th></th></tr></thead><tbody></tbody></table></div>
+        </div>
+      </div>
+      <div id="wEmpty" class="card empty" hidden>
+        <h2>Deine Watchlist ist noch leer</h2>
+        <p>Suche oben nach einem Wertpapier und füge es hinzu. Danach siehst du hier Kurs, Entwicklung und die neuesten Nachrichten dazu.</p>
+      </div>
+      <div id="wList" class="wlist"></div>
+    </section>
+
+    <!-- Nachrichten & Zahlen -->
+    <section id="tab-news" class="tab" hidden>
+      <div class="card">
+        <div class="filters">
+          <label>Position <select id="nSelect"></select></label>
+          <button class="ghost" type="button" id="nReload">Neu laden</button>
+          <span class="muted" id="nHint"></span>
+        </div>
+      </div>
+      <div id="nFund" hidden>
+        <div class="tiles" id="nTiles"></div>
+        <div class="card" id="nTermCard" hidden><h2>Zahlentermine</h2><p id="nTerms"></p></div>
+        <div class="grid2">
+          <div class="card"><h2>Geschäftsjahre</h2><div class="table-wrap"><table id="nAnnual"></table></div></div>
+          <div class="card"><h2>Quartale</h2><div class="table-wrap"><table id="nQuarter"></table></div></div>
+        </div>
+        <p class="muted small" id="nFundNote"></p>
+      </div>
+      <div class="card" id="nFundMsg" hidden></div>
+      <div class="card">
+        <h2>Nachrichten</h2>
+        <ul id="nList" class="news"></ul>
+      </div>
+    </section>
+
+    <!-- Kalender -->
+    <section id="tab-calendar" class="tab" hidden>
+      <div class="card">
+        <div class="filters">
+          <div class="seg" id="calMode"><button data-m="month" class="active">Monat</button><button data-m="list">Liste</button></div>
+          <div class="calnav" id="calNav">
+            <button class="ghost" type="button" id="calPrev" aria-label="Vorheriger Monat">‹</button>
+            <strong id="calTitle"></strong>
+            <button class="ghost" type="button" id="calNext" aria-label="Nächster Monat">›</button>
+            <button class="ghost" type="button" id="calToday">Heute</button>
+          </div>
+          <div class="kinds" id="calKinds"></div>
+        </div>
+        <div id="calGrid" class="calgrid"></div>
+        <div id="calList" hidden><div class="table-wrap"><table id="calTable"><thead><tr><th class="left">Datum</th><th class="left">Art</th><th class="left">Position</th><th class="left">Hinweis</th><th></th></tr></thead><tbody></tbody></table></div></div>
+        <p class="note">Hauptversammlungen sind geschätzt: Bei deutschen Aktien liegt die HV in der Regel am Handelstag vor dem Ex-Dividenden-Tag. Für ausländische Aktien gibt es keine verlässliche kostenlose Quelle. Geschätzte Termine sind gestrichelt markiert; trage den echten Termin unten ein, dann ersetzt er die Schätzung.</p>
+      </div>
+      <div class="card">
+        <h2>Termin von Hand eintragen</h2>
+        <form id="evForm" class="form inline">
+          <label>Position <select name="isin" id="evIsin"></select></label>
+          <label>Datum <input name="date" type="date" required></label>
+          <label>Art <select name="kind"><option value="hv">Hauptversammlung</option><option value="earnings">Zahlen</option><option value="other">Sonstiges</option></select></label>
+          <label>Notiz (optional) <input name="title"></label>
+          <button class="primary" type="submit">Eintragen</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Dividenden -->
+    <section id="tab-dividends" class="tab" hidden>
+      <div class="tiles">
+        <div class="tile"><span class="label">Erwartete Dividenden pro Jahr</span><span class="big" id="dYear">–</span><span class="sub">brutto, vor Steuern</span></div>
+        <div class="tile"><span class="label">Durchschnitt pro Monat</span><span class="big" id="dMonth">–</span><span class="sub">brutto</span></div>
+        <div class="tile"><span class="label">Dividendenrendite aktuell</span><span class="big" id="dYield">–</span><span class="sub">auf den heutigen Depotwert</span></div>
+        <div class="tile"><span class="label">Rendite auf Kaufwert</span><span class="big" id="dYoc">–</span><span class="sub">auf deine Einstandswerte</span></div>
+      </div>
+      <div class="card">
+        <h2>Erwartete Dividenden in den nächsten 12 Monaten</h2>
+        <div class="chart-box short"><canvas id="divMonths"></canvas></div>
+        <p class="muted small">Grundlage sind die Zahlungen der letzten 12 Monate, um ein Jahr fortgeschrieben. Zugeordnet nach Zahltag, wo er bekannt oder schätzbar ist, sonst nach Ex-Tag. Beträge brutto in Euro zum aktuellen Wechselkurs.</p>
+      </div>
+      <div class="card">
+        <h2>Nächste Zahlungen</h2>
+        <div class="table-wrap"><table id="divUpcoming"><thead><tr><th class="left">Position</th><th class="left">Ex-Tag</th><th class="left">Zahltag</th><th class="left">Stand</th><th>je Stück</th><th>Betrag</th></tr></thead><tbody></tbody></table></div>
+        <dl class="explain">
+          <dt>Ex-Tag</dt><dd>Stichtag für den Anspruch: Wer die Aktie am Tag davor besitzt, bekommt die Dividende. Ab dem Ex-Tag wird sie ohne diese Dividende gehandelt.</dd>
+          <dt>Zahltag</dt><dd>Der Tag, an dem das Geld auf dem Konto ankommt. „Geschätzt“ heißt: bei deutschen Aktien zwei Handelstage nach dem Ex-Tag gerechnet.</dd>
+          <dt>Stand</dt><dd>„Angekündigt“ = der Termin ist vom Unternehmen gemeldet. „Erwartet (Vorjahr)“ = noch nicht gemeldet; das Programm nimmt Termin und Betrag der Zahlung vor einem Jahr.</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h2>Dividenden je Position</h2>
+        <div class="table-wrap"><table id="divTable"><thead><tr><th class="left">Position</th><th>Stück</th><th>Dividende je Stück / Jahr</th><th>Zahlungen / Jahr</th><th>Pro Jahr</th><th>Rendite aktuell</th><th>Rendite auf Kaufkurs</th><th>Wachstum Ø 5 Jahre</th></tr></thead><tbody></tbody></table></div>
+        <dl class="explain">
+          <dt>Rendite aktuell</dt><dd>Jahresdividende geteilt durch den heutigen Wert der Position. Beispiel: 30 € Dividende auf 1.000 € Wert sind 3 %.</dd>
+          <dt>Rendite auf Kaufkurs</dt><dd>Dieselbe Dividende, aber bezogen auf das, was du damals bezahlt hast. Liegt sie über der aktuellen Rendite, ist die Aktie seit deinem Kauf gestiegen.</dd>
+          <dt>Wachstum Ø 5 Jahre</dt><dd>Um wie viel Prozent das Unternehmen seine Dividende in den letzten fünf Jahren im Schnitt pro Jahr erhöht hat. Ein Strich bedeutet: zu wenig Historie.</dd>
+        </dl>
+      </div>
+      <div class="card">
+        <h2>Dividendenrechner</h2>
+        <p>Der Rechner beantwortet eine Frage: <strong>Wie viel Dividende bekomme ich in den kommenden Jahren pro Jahr, wenn die Unternehmen ihre Dividende jedes Jahr etwas erhöhen?</strong> Du legst nur fest, mit welcher jährlichen Erhöhung gerechnet wird.</p>
+        <dl class="explain">
+          <dt>Szenario vorsichtig, mittel, optimistisch</dt><dd id="exScen">Alle Dividenden steigen jedes Jahr um denselben Prozentsatz.</dd>
+          <dt>Eigene Steigerung</dt><dd>Du gibst den Prozentsatz selbst ein. Beispiel: Bei 3 % werden aus 100 € Dividende heute nach einem Jahr 103 €, nach zehn Jahren rund 134 €. Bei 0 % bleibt alles gleich.</dd>
+          <dt>Wie in den letzten 5 Jahren</dt><dd>Jede Position bekommt ihren eigenen Wert aus der Spalte „Wachstum Ø 5 Jahre“ oben. Damit einzelne Ausreißer nichts verzerren, wird höchstens mit 10 % und mindestens mit 0 % gerechnet.</dd>
+          <dt>Sparplan einbeziehen</dt><dd>Ohne Haken bleibt dein Bestand, wie er heute ist. Mit Haken rechnet das Programm die monatlichen Zukäufe aus dem Tab „Sparplan“ dazu – mehr Anteile bringen mehr Dividende.</dd>
+        </dl>
+        <div class="filters">
+          <label>Position <select id="dpSelect"></select></label>
+          <label>Jahre <input id="dpYears" type="number" min="1" max="40" value="10" class="narrow"></label>
+          <label>Wie stark steigen die Dividenden pro Jahr? <select id="dpMode">
+            <option value="vorsichtig">Szenario vorsichtig</option>
+            <option value="mittel" selected>Szenario mittel</option>
+            <option value="optimistisch">Szenario optimistisch</option>
+            <option value="fixed">Eigene Steigerung für alle Positionen</option>
+            <option value="hist">Wie in den letzten 5 Jahren, je Position (0–10 %)</option>
+          </select></label>
+          <label id="dpRateLabel" hidden>Jährliche Dividendensteigerung in % <input id="dpRate" type="number" min="-10" max="20" step="0.5" value="3" class="narrow"></label>
+          <label class="check"><input type="checkbox" id="dpPlan"> Sparplan einbeziehen</label>
+        </div>
+        <p id="dpAssume" class="note"></p>
+        <h2 class="sub-h">Erwartete Dividende pro Jahr</h2>
+        <div class="chart-box short"><canvas id="divProj"></canvas></div>
+        <p id="dpSummary"></p>
+        <h2 class="sub-h">Verteilung auf die Monate</h2>
+        <div class="filters"><label>Jahr <select id="dpYearSel"></select></label></div>
+        <div class="chart-box short"><canvas id="divProjMonths"></canvas></div>
+        <p class="muted small">Hochrechnung, keine Prognose. Die Monatsverteilung übernimmt das Zahlungsmuster der letzten 12 Monate. Die Sätze der Szenarien sowie Steuer und Inflation stellst du unter Einstellungen → „Annahmen für Simulationen“ ein.</p>
+      </div>
+    </section>
+
+    <!-- Sparplan -->
+    <section id="tab-plan" class="tab" hidden>
+      <div class="card">
+        <h2>Sparplan</h2>
+        <div class="filters">
+          <label>Monatliche Rate in € <input id="spRate" type="number" min="0" step="25" class="narrow"></label>
+          <label>Laufzeit in Jahren <input id="spYears" type="number" min="1" max="40" class="narrow"></label>
+          <label>Rate jährlich erhöhen um % <input id="spDyn" type="number" min="0" max="20" step="0.5" class="narrow"></label>
+          <label>Wachstumsannahme <select id="spMode"><option value="scenario">Drei Szenarien</option><option value="hist">Wie bisher, je Position (0–12 %)</option></select></label>
+          <label id="spScLabel">Kennzahlen für Szenario <select id="spScenario"><option value="vorsichtig">vorsichtig</option><option value="mittel">mittel</option><option value="optimistisch">optimistisch</option></select></label>
+          <label class="check"><input type="checkbox" id="spDepot"> Heutiges Depot einbeziehen</label>
+          <label class="check"><input type="checkbox" id="spReinvest"> Dividenden wieder anlegen</label>
+        </div>
+        <p id="spAssume" class="muted small"></p>
+      </div>
+      <div class="tiles">
+        <div class="tile"><span class="label">Wert am Ende</span><span class="big" id="spEnd">–</span><span class="sub" id="spEndSub"></span></div>
+        <div class="tile"><span class="label">Eingezahlt</span><span class="big" id="spPaid">–</span><span class="sub" id="spPaidSub"></span></div>
+        <div class="tile"><span class="label">Zuwachs</span><span class="big" id="spGain">–</span><span class="sub" id="spGainSub"></span></div>
+        <div class="tile"><span class="label">Dividenden im letzten Jahr</span><span class="big" id="spDiv">–</span><span class="sub" id="spDivSub"></span></div>
+      </div>
+      <div class="card">
+        <h2>Erwartete Entwicklung</h2>
+        <div class="chart-box"><canvas id="spChart"></canvas></div>
+        <p class="note">Das ist eine Hochrechnung mit gleichmäßigem Wachstum, keine Prognose. Echte Kurse schwanken stark, und einzelne Jahre können deutlich im Minus liegen.</p>
+      </div>
+      <div class="card">
+        <h2>Aufteilung der Rate</h2>
+        <div class="row" style="margin-bottom:10px">
+          <button class="ghost" type="button" id="spEven">Gleichmäßig</button>
+          <button class="ghost" type="button" id="spLike">Wie heutige Depotanteile</button>
+          <button class="ghost" type="button" id="spZero">Alles auf 0</button>
+          <span id="spShareSum" class="muted" style="align-self:center"></span>
+        </div>
+        <div class="table-wrap"><table id="spTable"><thead><tr><th class="left">Position</th><th>Anteil an der Rate in %</th><th>Rate pro Monat</th><th>Kurswachstum p. a.</th><th>Wert heute</th><th>Wert am Ende</th></tr></thead><tbody></tbody></table></div>
+      </div>
+      <div class="card">
+        <h2>Jahr für Jahr</h2>
+        <div class="table-wrap scroll-y"><table id="spYearsTable"><thead><tr><th class="left">Jahr</th><th>Rate pro Monat</th><th>Eingezahlt gesamt</th><th>Wert</th><th>Dividenden im Jahr</th></tr></thead><tbody></tbody></table></div>
+      </div>
+    </section>
+
+    <!-- Einstellungen -->
+    <section id="tab-settings" class="tab" hidden>
+      <div class="card">
+        <h2>Annahmen für Simulationen</h2>
+        <p class="muted">Gilt für den Sparplan und den Dividendenrechner. Alle Angaben in Prozent pro Jahr.</p>
+        <form id="simForm">
+          <div class="table-wrap"><table class="plain-table">
+            <thead><tr><th class="left">Szenario</th><th class="left">Kurswachstum</th><th class="left">Dividendensteigerung</th></tr></thead>
+            <tbody>
+              <tr><td class="left">Vorsichtig</td><td class="left"><input name="vorsichtig.price" type="number" step="0.5" min="-10" max="20" class="narrow"></td><td class="left"><input name="vorsichtig.dividend" type="number" step="0.5" min="-10" max="20" class="narrow"></td></tr>
+              <tr><td class="left">Mittel</td><td class="left"><input name="mittel.price" type="number" step="0.5" min="-10" max="20" class="narrow"></td><td class="left"><input name="mittel.dividend" type="number" step="0.5" min="-10" max="20" class="narrow"></td></tr>
+              <tr><td class="left">Optimistisch</td><td class="left"><input name="optimistisch.price" type="number" step="0.5" min="-10" max="20" class="narrow"></td><td class="left"><input name="optimistisch.dividend" type="number" step="0.5" min="-10" max="20" class="narrow"></td></tr>
+            </tbody>
+          </table></div>
+          <div class="filters" style="margin-top:14px">
+            <label class="check"><input type="checkbox" name="inflation_on"> Inflation herausrechnen (Werte in heutiger Kaufkraft)</label>
+            <label>Inflation in % <input name="inflation" type="number" step="0.1" min="0" max="15" class="narrow"></label>
+          </div>
+          <div class="filters">
+            <label class="check"><input type="checkbox" name="tax_on"> Steuern berücksichtigen</label>
+            <label>Steuersatz in % <input name="tax_rate" type="number" step="0.001" min="0" max="50" class="narrow"></label>
+            <label>Sparerpauschbetrag in € pro Jahr <input name="allowance" type="number" step="100" min="0" class="narrow"></label>
+            <label class="check"><input type="checkbox" name="fund_exemption_on"> 30 % Teilfreistellung für ETFs und Fonds</label>
+          </div>
+          <p class="muted small">26,375 % entspricht Abgeltungsteuer plus Solidaritätszuschlag ohne Kirchensteuer. Der Pauschbetrag beträgt 1.000 € für Einzelpersonen und 2.000 € für Ehepaare. Die Teilfreistellung von 30 % gilt für Aktienfonds; die Vorabpauschale wird nicht berechnet. Das ist eine Näherung und keine Steuerberatung.</p>
+          <div class="row"><button class="primary" type="submit">Annahmen speichern</button><button class="ghost" type="button" id="simReset">Standardwerte</button></div>
+        </form>
+      </div>
+      <div class="card">
+        <h2>comdirect-Zugang</h2>
+        <p class="muted">Die Daten werden in der Windows-Anmeldeinformationsverwaltung gespeichert, nicht im Projektordner. Das Programm liest nur – es kann keine Orders aufgeben.</p>
+        <p id="cdStatus" class="status"></p>
+        <form id="credForm" class="form" autocomplete="off">
+          <label>client_id <input name="client_id" type="password" required></label>
+          <label>client_secret <input name="client_secret" type="password" required></label>
+          <label>Zugangsnummer <input name="username" type="password" required></label>
+          <label>PIN (optional speichern) <input name="pin" type="password" placeholder="leer lassen = bei jedem Abruf eingeben"></label>
+          <div class="row">
+            <button class="primary" type="submit">Zugangsdaten speichern</button>
+            <button class="ghost" type="button" id="cdLogout">Sitzung beenden</button>
+            <button class="ghost danger" type="button" id="cdDelete">Zugangsdaten löschen</button>
+          </div>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Wertpapier-Zuordnung</h2>
+        <p class="muted">Kurse kommen von Yahoo Finance. Stimmt ein Ticker, die Produktart oder die Branche nicht, kannst du sie hier überschreiben. Leeres Feld = automatischer Wert.</p>
+        <div class="table-wrap">
+          <table id="insTable">
+            <thead><tr><th class="left">Wertpapier</th><th class="left">Ticker (automatisch)</th><th class="left">Ticker von Hand</th><th class="left">Produktart</th><th class="left">Branche</th><th></th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Position von Hand anlegen</h2>
+        <form id="manForm" class="form inline">
+          <label>ISIN <input name="isin" required placeholder="z. B. DE0007164600"></label>
+          <label>Name (optional) <input name="name"></label>
+          <label>Stück <input name="quantity" required inputmode="decimal" placeholder="10"></label>
+          <label>Kaufkurs in EUR (optional) <input name="purchase_price" inputmode="decimal" placeholder="123,45"></label>
+          <button class="primary" type="submit">Anlegen</button>
+        </form>
+        <ul id="manList" class="plain"></ul>
+      </div>
+
+      <div class="card">
+        <h2>CSV-Import (Ausweichweg)</h2>
+        <p class="muted">Depotübersicht aus dem comdirect-Portal als CSV. Ein neuer Import ersetzt den vorherigen CSV-Stand. Dieser Weg wurde noch nicht mit einer echten Exportdatei geprüft.</p>
+        <form id="csvForm" class="form inline">
+          <input type="file" name="file" accept=".csv,text/csv" required>
+          <button class="primary" type="submit">Importieren</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h2>Programm</h2>
+        <p class="muted">Der Portfoliomanager läuft im Hintergrund weiter, auch wenn du den Browser schließt.</p>
+        <button class="ghost danger" type="button" id="quitBtn">Programm beenden</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Anmeldung comdirect -->
+<dialog id="loginDlg">
+  <form method="dialog" id="loginForm">
+    <h2>Depot bei comdirect abrufen</h2>
+    <div id="stepPin">
+      <label id="pinLabel">PIN <input id="pinInput" type="password" autocomplete="off"></label>
+      <p class="muted">Nach dem Klick fordert das Programm eine TAN-Freigabe bei comdirect an.</p>
+    </div>
+    <div id="stepTan" hidden>
+      <p id="tanText"></p>
+      <img id="tanImg" alt="photoTAN-Grafik" hidden>
+      <label id="tanLabel" hidden>TAN <input id="tanInput" inputmode="numeric" autocomplete="off"></label>
+      <p class="note">Bitte nur einmal bestätigen: Nach drei falschen TAN-Eingaben sperrt comdirect den Zugang.</p>
+    </div>
+    <p id="loginErr" class="error" hidden></p>
+    <div class="row end">
+      <button class="ghost" type="button" id="loginCancel">Abbrechen</button>
+      <button class="primary" type="button" id="loginNext">Anmelden</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" hidden></div>
+<script src="/static/vendor/chart.umd.js"></script>
+<script src="/static/app.js"></script>
+<script src="/static/phase2.js"></script>
+<script src="/static/sim.js"></script>
+<script src="/static/session.js"></script>
+<script src="/static/watch.js"></script>
+</body>
+</html>
